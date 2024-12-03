@@ -1,0 +1,58 @@
+#include <stdio.h>
+
+int main()
+{
+    unsigned char key[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15};
+    int N = sizeof(key) / sizeof(key[0]); // In this case sizeof(key[0]) = 1
+
+    // Key Scheduling Algorithm (KSA): Initialization of the S and K arrays
+    unsigned char K[256];
+    unsigned char S[256];
+
+    for (int i = 0; i <= 255; i++)
+    {
+        S[i] = i;
+        K[i] = key[i % N];
+    }
+
+    // Key Scheduling Algorithm (KSA): Scrambling of the S array
+    int j = 0;
+    for (int i = 0; i <= 255; i++)
+    {
+        j = (j + S[i] + K[i]) % 256;
+        unsigned char temp = S[i];
+        S[i] = S[j];
+        S[j] = temp;
+    }
+
+    // Pseudorandom Generation Algorithm (PRGA) - Generate an RC4 keystream byte
+    int i = 0;
+    j = 0;
+
+    // Print the first 8 bytes of keystream and then use them to encrypt the given data
+    unsigned char ciphertext[] = {245, 23, 45, 220, 143, 199, 53, 104};
+    int dataSize = sizeof(ciphertext) / sizeof(ciphertext[0]);
+
+    printf("RC4 Keystream and Encrypted Data:\n");
+    for (int count = 0; count < dataSize; count++)
+    {
+        // Generate the next keystream byte
+        i = (i + 1) % 256;
+        j = (j + S[i]) % 256;
+
+        unsigned char temp = S[i];
+        S[i] = S[j];
+        S[j] = temp;
+
+        unsigned char t = (S[i] + S[j]) % 256;
+        unsigned keystreamByte = S[t];
+
+        // Encrypt the corresponding byte by XORing the keystream byte
+        unsigned char encryptedByte = ciphertext[count] ^ keystreamByte;
+
+        // Display the keystream byte and the encrypted result
+        printf("Keystream Byte %d: %u, Encrypted Byte: %u\n", count + 1, keystreamByte, encryptedByte);
+    }
+
+    return 0;
+}
