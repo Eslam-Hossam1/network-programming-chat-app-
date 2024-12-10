@@ -1,70 +1,80 @@
+import os
 import socket
+import ssl
 import threading
+from pyftpdlib.authorizers import DummyAuthorizer
+from pyftpdlib.handlers import FTPHandler
+from pyftpdlib.servers import FTPServer
 
 # Server details
 HOST = '127.0.0.1'
-PORT = 1234
+TEXT_PORT = 1234
+FTP_PORT = 2121
+FTP_DIRECTORY = 'ftp_files'
+
+# SSL/TLS configuration
+context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+context.load_cert_chain(certfile='server.crt', keyfile='server.key')
+
+# Ensure the FTP_DIRECTORY exists
+os.makedirs(FTP_DIRECTORY, exist_ok=True)
 
 # Store connected clients
 clients = {}
 client_lock = threading.Lock()
 
 
-def handle_client(client_socket, username):
-    while True:
-        try:
-            message = client_socket.recv(1024).decode('utf-8')
-            if message:  # Check if the message is not empty
-                print(f"{username}: {message}")
-                # Handle multicast messages
-                if message.startswith('@'):
-                    parts = message.split(' ', 1)
-                    if len(parts) > 1:
-                        target_users = parts[0][1:].split(',')  # Handle multiple clients
-                        message_content = parts[1]
-                        with client_lock:
-                            for target_user in target_users:
-                                target_user = target_user.strip()
-                                if target_user in clients:
-                                    clients[target_user].send(
-                                        f"{username} (to {target_user}): {message_content}".encode())
-                    else:
-                        print("No message content provided for multicast.")
-                else:
-                    # Broadcast to all clients
-                    with client_lock:
-                        for client in clients.values():
-                            client.send(f"{username}: {message}".encode())
-            else:
-                print(f"Empty message received from {username}.")
-                break  # Exit if empty message
-        except Exception as e:
-            print(f"Error: {e}")
-            break
+# FTP server setup
+def start_ftp_server():
+    """Sets up and starts an FTP server."""
+    authorizer = DummyAuthorizer()
+    authorizer.add_user("user", "12345", FTP_DIRECTORY, perm="elradfmw")
+    handler = FTPHandler
+    handler.authorizer = authorizer
+    ftp_server = FTPServer((HOST, FTP_PORT), handler)
+    print(f"FTP server listening on {FTP_PORT}")
+    ftp_server.serve_forever()
 
-    client_socket.close()
+
+# Text server for multicast and direct messages
+def handle_client(client_socket, addr):
+    """Handles communication with the client, including text and email fetching."""
+    username = client_socket.recv(1024).decode('utf-8')
     with client_lock:
-        del clients[username]
-    print(f"{username} disconnected.")
+        clients[username] = client_socket
+    print(f"{username} connected from {addr}")
+
+    try:
+        while True:
+            data = client_socket.recv(2048)
+            if not data:
+                break
+            message = data.decode('utf-8')
+            with client_lock:
+                for client in clients.values():
+                    if client != username:
+                        client.send(f"[{username}] {message}".encode())
+
+    finally:
+        client_socket.close()
+        with client_lock:
+            del clients[username]
+        print(f"{username} disconnected from {addr}")
 
 
-def start_server():
+def start_text_server():
+    """Starts the SSL-wrapped text server."""
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind((HOST, PORT))
+    server_socket.bind((HOST, TEXT_PORT))
     server_socket.listen(5)
-    print("Server listening on port", PORT)
+    ssl_server = context.wrap_socket(server_socket, server_side=True)
+    print(f"Text server listening on {TEXT_PORT}")
 
     while True:
-        client_socket, address = server_socket.accept()
-        username = client_socket.recv(1024).decode('utf-8')
-
-        with client_lock:
-            clients[username] = client_socket
-
-        print(f"{username} connected from {address}")
-
-        threading.Thread(target=handle_client, args=(client_socket, username)).start()
+        client_socket, addr = ssl_server.accept()
+        threading.Thread(target=handle_client, args=(client_socket, addr), daemon=True).start()
 
 
-if __name__ == '__main__':
-    start_server()
+if __name__ == "__main__":
+    threading.Thread(target=start_ftp_server, daemon=True).start()
+    start_text_server()
