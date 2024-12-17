@@ -116,9 +116,7 @@ def listen_for_messages_from_server():
             root.after(0, add_message, f"[SERVER] Connection lost: {e}")
             break
 
-
 processed_email_ids = set()
-
 
 def display_image(filepath):
     """Displays an image attachment in the email box."""
@@ -164,17 +162,15 @@ def add_email_component(sender, subject, body, attachments):
                 display_image(path) if path.lower().endswith(
                     ('.png', '.jpg', '.jpeg', '.gif')) else messagebox.showinfo("Attachment",
                                                                                 f"Attachment saved at {path}"),
-                button.config(state=tk.DISABLED)
+                button.config(state=tk.DISABLED,)
             ]
 
         attachment_button = tk.Button(
-           
             email_frame,
             text=f"Open Attachment: {os.path.basename(attachment)}",
             font=SMALL_FONT,
             bg=BLUE,
-            fg=WHITE,
-             width=40,
+            fg=WHITE,width=40
         )
         attachment_button.config(command=create_command(attachment, attachment_button),width=40)
         attachment_button.pack(fill=tk.X, pady=2)
@@ -182,7 +178,6 @@ def add_email_component(sender, subject, body, attachments):
     email_frame.pack(fill=tk.X, padx=5, pady=5, anchor="w")
     email_box.window_create(tk.END, window=email_frame)
     email_box.insert(tk.END, "\n")  # Add spacing between emails
-
 
 def fetch_emails():
     """Fetches the latest emails from the inbox and displays attachments."""
@@ -242,7 +237,6 @@ def fetch_emails():
         mail.logout()
     except Exception as e:
         add_email_message(f"[EMAIL] Failed to fetch emails: {e}")
-
 
 def fetch_emails_periodically():
     """Fetch emails periodically in the background."""
